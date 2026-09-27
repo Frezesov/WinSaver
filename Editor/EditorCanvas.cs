@@ -21,6 +21,8 @@ internal sealed class EditorCanvas : FrameworkElement
 
     private static readonly Brush CropDim = Frozen(new SolidColorBrush(Color.FromArgb(0x99, 0, 0, 0)));
     private static readonly Brush PreviewFill = Frozen(new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)));
+    // Mid grey reads as an edge on both light and dark backgrounds, so a dark screenshot does not melt into the window.
+    private static readonly Brush FrameBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x66, 0x80, 0x80, 0x80)));
 
     private readonly VisualCollection _children;
     private readonly DrawingVisual _content = new();
@@ -261,6 +263,8 @@ internal sealed class EditorCanvas : FrameworkElement
             return;
         if (_cropping)
             DrawCrop(dc);
+        else
+            DrawFrame(dc);
 
         switch (_gesture)
         {
@@ -271,6 +275,14 @@ internal sealed class EditorCanvas : FrameworkElement
                 DrawShapePreview(dc);
                 break;
         }
+    }
+
+    private void DrawFrame(DrawingContext dc)
+    {
+        var view = ViewRect;
+        double px = 1 / Scale;
+        view.Inflate(px / 2, px / 2);
+        dc.DrawRectangle(null, new Pen(FrameBrush, px), view);
     }
 
     private void DrawShapePreview(DrawingContext dc)
