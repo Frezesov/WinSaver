@@ -20,7 +20,7 @@
     <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
     <DisableTransitiveFrameworkReferenceDownloads>true</DisableTransitiveFrameworkReferenceDownloads>
     <NuGetAudit>false</NuGetAudit>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Product>WinSaver</Product>
     <AssemblyTitle>WinSaver</AssemblyTitle>
     <Description>Скриншоты области экрана по Win + Shift + S</Description>
