@@ -21,7 +21,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly AppSettings _settings;
     private readonly SettingsStore _store;
     private readonly KeyboardHook _keyboard;
-    private readonly HotkeyService _hotkeys;
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _updateTimer;
     private readonly DispatcherTimer _cleanupTimer;
@@ -54,8 +53,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _keyboard = new KeyboardHook(dispatcher);
         _keyboard.Pressed += () => CaptureRequested?.Invoke();
-        _hotkeys = new HotkeyService();
-        _hotkeys.Pressed += () => CaptureRequested?.Invoke();
 
         NewScreenshotCommand = new RelayCommand(() => CaptureRequested?.Invoke());
         EditLastCommand = new RelayCommand(EditLast);
@@ -470,24 +467,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void ApplyHooks()
     {
-        _keyboard.Configure(ReplaceSnipping, InterceptPrintScreen);
-
-        if (IsCapturingHotkey || Hotkey.IsEmpty)
-        {
-            _hotkeys.Unregister();
-            HotkeyError = null;
-        }
-        else if (!Hotkey.IsValid)
-        {
-            _hotkeys.Unregister();
-            HotkeyError = "Добавьте Ctrl, Alt, Shift или Win — без них можно назначить только F1–F24";
-        }
-        else
-        {
-            HotkeyError = _hotkeys.Register(Hotkey)
-                ? null
-                : "Сочетание уже занято системой или другой программой — выберите другое";
-        }
+        var custom = IsCapturingHotkey ? default : Hotkey;
+        _keyboard.Configure(ReplaceSnipping, InterceptPrintScreen, custom);
+        HotkeyError = custom.IsEmpty || custom.IsValid
+            ? null
+            : "Добавьте Ctrl, Alt, Shift или Win — без них можно назначить только F1–F24";
         OnPropertyChanged(nameof(CaptureShortcutText));
         OnPropertyChanged(nameof(LastShotDetails));
     }
@@ -520,6 +504,5 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _store.Save(_settings);
         }
         _keyboard.Dispose();
-        _hotkeys.Dispose();
     }
 }

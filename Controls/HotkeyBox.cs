@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using WinSaver.Core;
 
 namespace WinSaver.Controls;
@@ -38,7 +39,13 @@ public sealed class HotkeyBox : Control
         KeyboardNavigation.IsTabStopProperty.OverrideMetadata(typeof(HotkeyBox), new FrameworkPropertyMetadata(true));
     }
 
-    public HotkeyBox() => UpdateDisplay();
+    private readonly ShortcutRecorder _recorder = new();
+
+    public HotkeyBox()
+    {
+        _recorder.KeyChanged += OnRecorderKey;
+        UpdateDisplay();
+    }
 
     public Hotkey Hotkey
     {
@@ -87,8 +94,37 @@ public sealed class HotkeyBox : Control
         }
 
         e.Handled = true;
-        var modifiers = Keyboard.Modifiers;
+        if (!_recorder.IsRecording)
+            Press(key, CurrentModifiers());
+    }
 
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        if (!IsCapturing)
+            return;
+        e.Handled = true;
+        if (!_recorder.IsRecording)
+            ShowPreview(new Hotkey(CurrentModifiers(), Key.None), CapturePrompt);
+    }
+
+    protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
+    {
+        base.OnLostKeyboardFocus(e);
+        EndCapture();
+    }
+
+    private void OnRecorderKey(Key key, ModifierKeys modifiers, bool down)
+    {
+        if (!IsCapturing)
+            return;
+        if (down)
+            Press(key, modifiers);
+        else
+            ShowPreview(new Hotkey(modifiers, Key.None), CapturePrompt);
+    }
+
+    private void Press(Key key, ModifierKeys modifiers)
+    {
         if (Hotkey.IsModifierKey(key))
         {
             ShowPreview(new Hotkey(modifiers, Key.None), CapturePrompt);
@@ -117,25 +153,16 @@ public sealed class HotkeyBox : Control
         EndCapture();
     }
 
-    protected override void OnPreviewKeyUp(KeyEventArgs e)
-    {
-        if (!IsCapturing)
-            return;
-        e.Handled = true;
-        ShowPreview(new Hotkey(Keyboard.Modifiers, Key.None), CapturePrompt);
-    }
-
-    protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
-    {
-        base.OnLostKeyboardFocus(e);
-        EndCapture();
-    }
+    // Keyboard.Modifiers never reports the Windows key.
+    private static ModifierKeys CurrentModifiers() =>
+        Keyboard.Modifiers | (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin) ? ModifierKeys.Windows : ModifierKeys.None);
 
     private void StartCapture()
     {
         if (IsCapturing)
             return;
         IsCapturing = true;
+        _recorder.Start(PresentationSource.FromVisual(this) is HwndSource source ? source.Handle : IntPtr.Zero);
         ShowPreview(default, CapturePrompt);
     }
 
@@ -143,6 +170,7 @@ public sealed class HotkeyBox : Control
     {
         if (!IsCapturing)
             return;
+        _recorder.Stop();
         IsCapturing = false;
         UpdateDisplay();
     }

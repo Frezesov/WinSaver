@@ -1,31 +1,37 @@
 using System.Runtime.InteropServices;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace WinSaver.Core;
 
 /// <summary>
-/// Takes Win + Shift + S (and optionally Print Screen) away from Windows with a low-level keyboard hook.
-/// Low-level hooks run before the shell's own hotkeys, so the swallowed keys never open Snipping Tool.
+/// Catches the capture shortcuts with a low-level keyboard hook: Win + Shift + S, optionally Print Screen and the
+/// user's own combination. Low-level hooks run before the shell's own hotkeys, so a swallowed key never opens
+/// Snipping Tool or whatever else Windows keeps on that combination.
 /// The hook lives on its own thread with a message loop: a slow UI thread would otherwise delay every
 /// keystroke in the system, and Windows silently drops hooks that time out.
 /// </summary>
 internal sealed class KeyboardHook : IDisposable
 {
+    private sealed record Shortcut(int Vk, ModifierKeys Modifiers);
+
+    private static readonly Shortcut Snipping = new(Native.VK_S, ModifierKeys.Windows | ModifierKeys.Shift);
+    private static readonly Shortcut PrintScreen = new(Native.VK_SNAPSHOT, ModifierKeys.None);
+
     // Marks keystrokes sent by the hook itself so it lets them through.
     private static readonly IntPtr OwnInput = new(0x57534156);
-    // An unassigned key: pressing it while Win is held keeps the Start menu from opening when Win is released.
+    // An unassigned key: pressing it while Win or Alt is held keeps the Start menu or the window's menu bar
+    // from opening when the modifier is released.
     private const ushort DummyKey = 0xFF;
 
     private readonly Dispatcher _dispatcher;
     private readonly Native.LowLevelKeyboardProc _proc;
     private Thread? _thread;
     private uint _threadId;
-    private volatile bool _snipping;
-    private volatile bool _printScreen;
+    private volatile Shortcut[] _shortcuts = [];
 
     // Touched by the hook thread only.
-    private bool _holdingS;
-    private bool _holdingPrint;
+    private int _heldKey;
 
     public event Action? Pressed;
 
@@ -35,11 +41,18 @@ internal sealed class KeyboardHook : IDisposable
         _proc = HookProc;
     }
 
-    public void Configure(bool snipping, bool printScreen)
+    public void Configure(bool snipping, bool printScreen, Hotkey custom)
     {
-        _snipping = snipping;
-        _printScreen = printScreen;
-        if (snipping || printScreen)
+        var shortcuts = new List<Shortcut>(3);
+        if (snipping)
+            shortcuts.Add(Snipping);
+        if (printScreen)
+            shortcuts.Add(PrintScreen);
+        if (custom.IsValid)
+            shortcuts.Add(new((int)custom.VirtualKey, custom.Modifiers));
+        _shortcuts = [.. shortcuts];
+
+        if (shortcuts.Count > 0)
             Start();
         else
             Stop();
@@ -80,7 +93,7 @@ internal sealed class KeyboardHook : IDisposable
         Native.PostThreadMessage(_threadId, Native.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
         _thread.Join(1000);
         _thread = null;
-        _holdingS = _holdingPrint = false;
+        _heldKey = 0;
     }
 
     private IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam)
@@ -97,53 +110,43 @@ internal sealed class KeyboardHook : IDisposable
     private bool Swallow(int vk, int message)
     {
         bool down = message is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN;
-        bool up = message is Native.WM_KEYUP or Native.WM_SYSKEYUP;
-
-        if (vk == Native.VK_S)
+        // Repeats and the release of a key that started a capture go the same way as its press.
+        if (vk == _heldKey)
         {
-            if (up && _holdingS)
-            {
-                _holdingS = false;
-                return true;
-            }
-            if (down && _holdingS)
-                return true;
-            if (down && _snipping && IsWinShift())
-            {
-                _holdingS = true;
-                PressDummyKey();
-                Raise();
-                return true;
-            }
+            if (!down)
+                _heldKey = 0;
+            return true;
         }
-        else if (vk == Native.VK_SNAPSHOT)
+        if (!down)
+            return false;
+
+        var modifiers = HeldModifiers();
+        foreach (var shortcut in _shortcuts)
         {
-            if (up && _holdingPrint)
-            {
-                _holdingPrint = false;
-                return true;
-            }
-            if (down && _holdingPrint)
-                return true;
-            if (down && _printScreen && NoModifiers())
-            {
-                _holdingPrint = true;
-                Raise();
-                return true;
-            }
+            if (shortcut.Vk != vk || shortcut.Modifiers != modifiers)
+                continue;
+            _heldKey = vk;
+            if ((modifiers & (ModifierKeys.Windows | ModifierKeys.Alt)) != 0)
+                PressDummyKey();
+            Raise();
+            return true;
         }
         return false;
     }
 
-    private static bool IsWinShift() =>
-        (Native.IsKeyDown(Native.VK_LWIN) || Native.IsKeyDown(Native.VK_RWIN))
-        && Native.IsKeyDown(Native.VK_SHIFT)
-        && !Native.IsKeyDown(Native.VK_CONTROL)
-        && !Native.IsKeyDown(Native.VK_MENU);
-
-    private static bool NoModifiers() =>
-        !Native.IsKeyDown(Native.VK_LWIN) && !Native.IsKeyDown(Native.VK_RWIN)
-        && !Native.IsKeyDown(Native.VK_SHIFT) && !Native.IsKeyDown(Native.VK_CONTROL) && !Native.IsKeyDown(Native.VK_MENU);
+    private static ModifierKeys HeldModifiers()
+    {
+        var modifiers = ModifierKeys.None;
+        if (Native.IsKeyDown(Native.VK_CONTROL))
+            modifiers |= ModifierKeys.Control;
+        if (Native.IsKeyDown(Native.VK_MENU))
+            modifiers |= ModifierKeys.Alt;
+        if (Native.IsKeyDown(Native.VK_SHIFT))
+            modifiers |= ModifierKeys.Shift;
+        if (Native.IsKeyDown(Native.VK_LWIN) || Native.IsKeyDown(Native.VK_RWIN))
+            modifiers |= ModifierKeys.Windows;
+        return modifiers;
+    }
 
     private static void PressDummyKey()
     {

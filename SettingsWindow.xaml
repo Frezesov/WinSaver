@@ -48,7 +48,7 @@
             </controls:SettingsCard>
 
             <controls:SettingsCard Glyph="&#xE92E;" Title="Своё сочетание клавиш"
-                                   Description="Ещё одно сочетание для нового скриншота. Нажмите на поле и введите его. Esc — отмена, Backspace — очистить">
+                                   Description="Ещё одно сочетание для нового скриншота, можно с Win. Esc — отмена, Backspace — очистить">
                 <controls:SettingsCard.Detail>
                     <TextBlock Style="{StaticResource ErrorText}" Text="{Binding HotkeyError}" />
                 </controls:SettingsCard.Detail>
