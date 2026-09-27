@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IO;
+using System.Runtime;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
@@ -86,11 +87,12 @@ public partial class App : Application
         var session = new CaptureSession(_vm.CaptureMode);
         _session = session;
         session.ModeChanged += mode => _vm.CaptureMode = mode;
-        session.Completed += image =>
+        session.Completed += async image =>
         {
             _session = null;
             if (image is not null)
-                _ = _vm.StoreAsync(image);
+                await _vm.StoreAsync(image);
+            ReleaseMemory();
         };
         try
         {
@@ -123,9 +125,23 @@ public partial class App : Application
 
         var editor = new EditorWindow(_vm, shot, image);
         _editors[shot.Path] = editor;
-        editor.Closed += (_, _) => _editors.Remove(shot.Path);
+        editor.Closed += (_, _) =>
+        {
+            _editors.Remove(shot.Path);
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, ReleaseMemory);
+        };
         editor.Show();
         editor.Activate();
+    }
+
+    // A capture holds the whole desktop as pixels, tens of megabytes on large screens, partly in native buffers
+    // that only finalizers free. A tray app idles for hours, so it hands that memory back as soon as it is done.
+    private static void ReleaseMemory()
+    {
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
     }
 
     private void ShowSettings()
