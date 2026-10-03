@@ -495,6 +495,9 @@
         </Setter>
     </Style>
 
+    <!-- Icon of the blur tool: Segoe Fluent Icons has no mosaic glyph -->
+    <Geometry x:Key="MosaicIcon">M1,1 H6 V6 H1 Z M11,1 H16 V6 H11 Z M6,6 H11 V11 H6 Z M1,11 H6 V16 H1 Z M11,11 H16 V16 H11 Z M0,0 H17 V17 H0 Z M1,1 V16 H16 V1 Z</Geometry>
+
     <!-- Glyph toggle for a toolbar: a subtle fill on hover, the selected one tinted with the accent -->
     <Style x:Key="ToolToggle" TargetType="RadioButton">
         <Setter Property="Width" Value="40" />
@@ -587,6 +590,21 @@
         <Setter Property="Width" Value="1" />
         <Setter Property="Margin" Value="6,6,6,6" />
         <Setter Property="Background" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+    </Style>
+
+    <!-- Bar floating over the frozen screen while picking an area; the shadow keeps it apart from any screenshot -->
+    <Style x:Key="OverlayBar" TargetType="Border">
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Cursor" Value="Arrow" />
+        <Setter Property="Background" Value="{DynamicResource ContextMenuBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ContextMenuBorderBrush}" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="4" Direction="270" Opacity="0.25" />
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Hotkey capture field rendered as keycaps -->

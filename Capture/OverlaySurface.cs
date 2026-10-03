@@ -49,7 +49,7 @@ internal sealed class OverlaySurface : FrameworkElement
         dc.DrawRectangle(null, new Pen(Outline, px), border);
         dc.Pop();
 
-        if (_session.LabelMonitor == _monitor)
+        if (_session.LabelMonitor == _monitor && !_session.IsEditing)
             DrawSize(dc, highlight, local, full);
     }
 

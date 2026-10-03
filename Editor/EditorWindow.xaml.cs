@@ -13,9 +13,6 @@ namespace WinSaver.Editor;
 
 public partial class EditorWindow : Window
 {
-    private static readonly string[] Palette =
-        ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#0A84FF", "#AF52DE", "#FFFFFF", "#000000"];
-
     private readonly MainViewModel _vm;
     private readonly Screenshot _shot;
     private readonly EditDocument _doc;
@@ -39,8 +36,10 @@ public partial class EditorWindow : Window
         };
 
         Board.TextFont = (FontFamily)FindResource("AppFontFamily");
+        foreach (var tool in EditorTools.All)
+            ToolButtons.Children.Add(EditorTools.ToolButton(tool, "Tool"));
         BuildColors();
-        Board.Color = ParseColor(vm.EditorColor);
+        Board.Color = EditorTools.ParseColor(vm.EditorColor);
         Board.Size = Math.Clamp(vm.EditorSize, SizeSlider.Minimum, SizeSlider.Maximum);
         SizeSlider.Value = Board.Size;
         SizeSlider.ValueChanged += OnSizeChanged;
@@ -103,18 +102,10 @@ public partial class EditorWindow : Window
 
     private void BuildColors()
     {
-        foreach (var hex in Palette)
+        foreach (var hex in EditorTools.Palette)
         {
-            var color = ParseColor(hex);
-            var swatch = new RadioButton
-            {
-                GroupName = "Color",
-                Background = new SolidColorBrush(color),
-                Tag = hex,
-                ToolTip = ColorName(hex),
-            };
-            swatch.SetResourceReference(StyleProperty, "ColorSwatch");
-            System.Windows.Automation.AutomationProperties.SetName(swatch, ColorName(hex));
+            var color = EditorTools.ParseColor(hex);
+            var swatch = EditorTools.ColorSwatch(hex, "Color");
             swatch.Checked += (_, _) =>
             {
                 Board.Color = color;
@@ -122,30 +113,6 @@ public partial class EditorWindow : Window
                 UpdateSizePreview();
             };
             ColorButtons.Children.Add(swatch);
-        }
-    }
-
-    private static string ColorName(string hex) => hex switch
-    {
-        "#FF3B30" => "Красный",
-        "#FF9500" => "Оранжевый",
-        "#FFCC00" => "Жёлтый",
-        "#34C759" => "Зелёный",
-        "#0A84FF" => "Синий",
-        "#AF52DE" => "Фиолетовый",
-        "#FFFFFF" => "Белый",
-        _ => "Чёрный",
-    };
-
-    private static Color ParseColor(string hex)
-    {
-        try
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-        catch (FormatException)
-        {
-            return Colors.Red;
         }
     }
 
@@ -419,7 +386,7 @@ public partial class EditorWindow : Window
                 return;
         }
 
-        if (mods == ModifierKeys.None && ToolForKey(key) is { } tool)
+        if (mods == ModifierKeys.None && EditorTools.ForKey(key) is { } tool)
         {
             Board.Tool = tool;
             if (tool != EditorTool.Crop)
@@ -435,20 +402,6 @@ public partial class EditorWindow : Window
         if (e.Key == Key.Space)
             Board.SetSpaceDown(false);
     }
-
-    private static EditorTool? ToolForKey(Key key) => key switch
-    {
-        Key.P => EditorTool.Pen,
-        Key.M => EditorTool.Marker,
-        Key.A => EditorTool.Arrow,
-        Key.R => EditorTool.Rectangle,
-        Key.O => EditorTool.Ellipse,
-        Key.T => EditorTool.Text,
-        Key.B => EditorTool.Pixelate,
-        Key.C => EditorTool.Crop,
-        Key.E => EditorTool.Eraser,
-        _ => null,
-    };
 
     // ---- Closing
 

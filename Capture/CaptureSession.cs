@@ -1,18 +1,23 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using WinSaver.Core;
+using WinSaver.ViewModels;
+using CaptureMode = WinSaver.Core.CaptureMode;
 
 namespace WinSaver.Capture;
 
 /// <summary>
 /// One round of picking an area: freezes the screen, covers every monitor with an overlay, follows the mouse
 /// in physical pixels of the virtual desktop (so a selection can cross monitors) and hands back the picked part.
+/// With the quick edit on, the overlay stays up after picking so the part can be drawn on first.
 /// </summary>
 internal sealed class CaptureSession
 {
     private const int MinSelection = 4;
 
+    private readonly MainViewModel? _quickEdit;
     private readonly List<OverlayWindow> _windows = [];
     private List<MonitorArea> _monitors = [];
     private List<PixelRect> _windowRects = [];
@@ -20,9 +25,15 @@ internal sealed class CaptureSession
     private PixelRect _virtual;
     private Native.POINT _anchor;
     private OverlayToolbar? _toolbar;
+    private QuickEditor? _editor;
     private bool _finished;
 
-    public CaptureSession(CaptureMode mode) => Mode = mode;
+    /// <param name="quickEdit">Where the quick edit takes its tool, colour and thickness from; null when it is off.</param>
+    public CaptureSession(CaptureMode mode, MainViewModel? quickEdit)
+    {
+        Mode = mode;
+        _quickEdit = quickEdit;
+    }
 
     public CaptureMode Mode { get; private set; }
 
@@ -41,6 +52,9 @@ internal sealed class CaptureSession
     public MonitorArea? LabelMonitor { get; private set; }
 
     public bool IsDragging { get; private set; }
+
+    /// <summary>The area is picked and is being drawn on.</summary>
+    public bool IsEditing => _editor is not null;
 
     public event Action<CaptureMode>? ModeChanged;
 
@@ -96,7 +110,7 @@ internal sealed class CaptureSession
 
     public void PointerDown(OverlayWindow window)
     {
-        if (_finished)
+        if (_finished || IsEditing)
             return;
         if (Mode == CaptureMode.Rectangle)
         {
@@ -109,13 +123,13 @@ internal sealed class CaptureSession
         }
         else if (Highlight is { } target)
         {
-            Finish(target);
+            Pick(target);
         }
     }
 
     public void PointerMove()
     {
-        if (_finished)
+        if (_finished || IsEditing)
             return;
         if (IsDragging)
         {
@@ -140,7 +154,7 @@ internal sealed class CaptureSession
         window.ReleaseMouseCapture();
         if (dragged is { Width: >= MinSelection, Height: >= MinSelection } selection)
         {
-            Finish(selection);
+            Pick(selection);
             return;
         }
         // A click without a drag picks nothing, like in Snipping Tool.
@@ -156,7 +170,9 @@ internal sealed class CaptureSession
             PointerUp(window);
     }
 
-    public void Cancel() => Finish(null);
+    public void PreviewKeyDown(KeyEventArgs e) => _editor?.PreviewKeyDown(e);
+
+    public void Cancel() => Close(null);
 
     private void UpdateHover()
     {
@@ -200,20 +216,44 @@ internal sealed class CaptureSession
             window.Surface.InvalidateVisual();
     }
 
-    private void Finish(PixelRect? area)
+    private void Pick(PixelRect area)
+    {
+        if (_finished)
+            return;
+        if (area.IsEmpty || _shot is null)
+        {
+            Close(null);
+            return;
+        }
+        var image = ScreenGrabber.CopyRegion(_shot, area.Offset(-_virtual.X, -_virtual.Y));
+        if (_quickEdit is null)
+            Close(image);
+        else
+            BeginEdit(_quickEdit, area, image);
+    }
+
+    private void BeginEdit(MainViewModel vm, PixelRect area, BitmapSource image)
+    {
+        Highlight = area;
+        _toolbar?.Hide();
+        foreach (var window in _windows)
+            window.Cursor = Cursors.Arrow;
+        var host = _windows.FirstOrDefault(w => w.Monitor == LabelMonitor) ?? _windows[0];
+        _editor = new QuickEditor(vm, image, area, _windows, host);
+        _editor.Completed += Close;
+        Redraw();
+    }
+
+    private void Close(BitmapSource? image)
     {
         if (_finished)
             return;
         _finished = true;
-
-        BitmapSource? image = null;
-        if (area is { IsEmpty: false } a && _shot is not null)
-            image = ScreenGrabber.CopyRegion(_shot, a.Offset(-_virtual.X, -_virtual.Y));
-
         foreach (var window in _windows)
             window.Close();
         _windows.Clear();
         _shot = null;
+        _editor = null;
         Completed?.Invoke(image);
     }
 }

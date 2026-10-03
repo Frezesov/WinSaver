@@ -84,7 +84,7 @@ public partial class App : Application
     {
         if (_session is not null || _vm is null)
             return;
-        var session = new CaptureSession(_vm.CaptureMode);
+        var session = new CaptureSession(_vm.CaptureMode, _vm.QuickEdit ? _vm : null);
         _session = session;
         session.ModeChanged += mode => _vm.CaptureMode = mode;
         session.Completed += async image =>

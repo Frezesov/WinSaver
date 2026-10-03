@@ -34,6 +34,7 @@ internal sealed class EditorCanvas : FrameworkElement
     private double _zoom = 1;
     private Vector _offset;
     private bool _fit = true;
+    private Point? _pinned;
 
     private Gesture _gesture;
     private readonly List<Point> _points = [];
@@ -69,6 +70,7 @@ internal sealed class EditorCanvas : FrameworkElement
         Focusable = true;
         FocusVisualStyle = null;
         ClipToBounds = true;
+        UpdateCursor();
     }
 
     public event Action? ViewChanged;
@@ -147,9 +149,13 @@ internal sealed class EditorCanvas : FrameworkElement
     public void Load(EditDocument doc)
     {
         if (_doc is not null)
+        {
             _doc.Changed -= OnDocumentChanged;
+            _doc.DraftChanged -= RenderLive;
+        }
         _doc = doc;
         _doc.Changed += OnDocumentChanged;
+        _doc.DraftChanged += RenderLive;
         _shownCrop = doc.Crop;
         RenderContent();
         Fit();
@@ -167,9 +173,26 @@ internal sealed class EditorCanvas : FrameworkElement
 
     // ---- View
 
+    /// <summary>
+    /// Shows the picture one image pixel per device pixel with <paramref name="origin"/> of it at the top-left
+    /// corner, for drawing right on the frozen screen: no zoom, scrolling, panning or frame.
+    /// </summary>
+    public void PinView(Point origin)
+    {
+        _pinned = origin;
+        Fit();
+    }
+
     public void Fit()
     {
         _fit = true;
+        if (_pinned is { } origin)
+        {
+            _zoom = 1;
+            _offset = new Vector(-origin.X / Dpi, -origin.Y / Dpi);
+            UpdateTransform();
+            return;
+        }
         if (ActualWidth <= 0 || ActualHeight <= 0)
             return;
         var view = ViewRect;
@@ -263,18 +286,31 @@ internal sealed class EditorCanvas : FrameworkElement
             return;
         if (_cropping)
             DrawCrop(dc);
-        else
+        else if (_pinned is null)
             DrawFrame(dc);
+        if (_doc.Draft is { } draft)
+            dc.DrawDrawing(draft);
+    }
 
-        switch (_gesture)
+    private void UpdateDraft()
+    {
+        if (_doc is null)
+            return;
+        _doc.Draft = _gesture switch
         {
-            case Gesture.Ink when _points.Count > 0:
-                CreateInk()?.Render(dc);
-                break;
-            case Gesture.Shape:
-                DrawShapePreview(dc);
-                break;
-        }
+            Gesture.Ink => Record(dc => CreateInk()?.Render(dc)),
+            Gesture.Shape => Record(DrawShapePreview),
+            _ => null,
+        };
+    }
+
+    private static Drawing Record(Action<DrawingContext> draw)
+    {
+        var drawing = new DrawingGroup();
+        using (var dc = drawing.Open())
+            draw(dc);
+        drawing.Freeze();
+        return drawing;
     }
 
     private void DrawFrame(DrawingContext dc)
@@ -389,7 +425,7 @@ internal sealed class EditorCanvas : FrameworkElement
         var screen = e.GetPosition(this);
         var point = ToImage(screen);
 
-        if (e.ChangedButton == MouseButton.Middle || (e.ChangedButton == MouseButton.Left && _spaceDown))
+        if (_pinned is null && (e.ChangedButton == MouseButton.Middle || (e.ChangedButton == MouseButton.Left && _spaceDown)))
         {
             CommitText();
             _gesture = Gesture.Pan;
@@ -435,7 +471,7 @@ internal sealed class EditorCanvas : FrameworkElement
                 break;
         }
         CaptureMouse();
-        RenderLive();
+        UpdateDraft();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -464,11 +500,11 @@ internal sealed class EditorCanvas : FrameworkElement
                 {
                     _points.Add(point);
                 }
-                RenderLive();
+                UpdateDraft();
                 return;
             case Gesture.Shape:
                 _current = point;
-                RenderLive();
+                UpdateDraft();
                 return;
             case Gesture.Erase:
                 EraseAt(point);
@@ -505,13 +541,14 @@ internal sealed class EditorCanvas : FrameworkElement
                 CommitShape();
                 break;
         }
+        _doc.Draft = null;
         RenderLive();
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (_doc is null)
+        if (_doc is null || _pinned is not null)
             return;
         e.Handled = true;
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -573,6 +610,7 @@ internal sealed class EditorCanvas : FrameworkElement
         _points.Clear();
         ReleaseMouseCapture();
         UpdateCursor();
+        _doc?.Draft = null;
         RenderLive();
         return true;
     }

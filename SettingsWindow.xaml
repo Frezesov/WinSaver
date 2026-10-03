@@ -34,6 +34,11 @@
                 </StackPanel>
             </controls:SettingsCard>
 
+            <controls:SettingsCard Glyph="&#xEDFB;" Title="Быстрая правка"
+                                   Description="После выбора области прямо на ней появляются инструменты редактора. В буфер обмена и в папку скриншот попадёт по кнопке «Готово» или Enter, Esc отменяет снимок">
+                <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding QuickEdit}" />
+            </controls:SettingsCard>
+
             <!-- Calling WinSaver -->
             <TextBlock Text="Вызов" Style="{StaticResource SectionTitle}" />
 

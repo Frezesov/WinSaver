@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Effects;
 using WinSaver.Core;
 using CaptureMode = WinSaver.Core.CaptureMode;
 
@@ -15,13 +14,7 @@ internal sealed class OverlayToolbar : Border
         HorizontalAlignment = HorizontalAlignment.Center;
         VerticalAlignment = VerticalAlignment.Top;
         Margin = new Thickness(0, 16, 0, 0);
-        Padding = new Thickness(4);
-        CornerRadius = new CornerRadius(8);
-        BorderThickness = new Thickness(1);
-        Cursor = Cursors.Arrow;
-        SetResourceReference(BackgroundProperty, "ContextMenuBackground");
-        SetResourceReference(BorderBrushProperty, "ContextMenuBorderBrush");
-        Effect = new DropShadowEffect { BlurRadius = 16, ShadowDepth = 4, Direction = 270, Opacity = 0.25 };
+        SetResourceReference(StyleProperty, "OverlayBar");
 
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(ModeButton(session, CaptureMode.Rectangle, "", "Прямоугольник"));

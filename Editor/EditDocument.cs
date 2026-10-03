@@ -36,7 +36,25 @@ internal sealed class EditDocument
 
     public bool IsUntouched => _annotations.Count == 0 && !IsCropped;
 
+    /// <summary>
+    /// The stroke being drawn. It is not part of the picture yet, but it is kept here so that every view of the
+    /// document shows it, including a view on another monitor.
+    /// </summary>
+    public Drawing? Draft
+    {
+        get;
+        set
+        {
+            if (field == value)
+                return;
+            field = value;
+            DraftChanged?.Invoke();
+        }
+    }
+
     public event Action? Changed;
+
+    public event Action? DraftChanged;
 
     public void Add(Annotation annotation) => Do(new AddEdit(annotation));
 

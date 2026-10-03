@@ -222,6 +222,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set => Update(_settings.CaptureMode, value, v => _settings.CaptureMode = v);
     }
 
+    public bool QuickEdit
+    {
+        get => _settings.QuickEdit;
+        set => Update(_settings.QuickEdit, value, v => _settings.QuickEdit = v);
+    }
+
     internal EditorTool EditorTool
     {
         get => _settings.EditorTool;

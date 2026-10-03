@@ -23,6 +23,9 @@ public sealed class AppSettings
 
     public CaptureMode CaptureMode { get; set; } = CaptureMode.Rectangle;
 
+    /// <summary>Draw on the picked area right on the frozen screen before the screenshot is kept.</summary>
+    public bool QuickEdit { get; set; }
+
     public EditorTool EditorTool { get; set; } = EditorTool.Arrow;
     public string EditorColor { get; set; } = "#FF3B30";
     public double EditorSize { get; set; } = 4;
