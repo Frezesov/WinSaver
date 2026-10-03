@@ -174,6 +174,18 @@ internal sealed class CaptureSession
 
     public void Cancel() => Close(null);
 
+    /// <summary>
+    /// An overlay is closing. Unless the session closes it itself, e.g. after Alt + F4, the whole round ends
+    /// without a picture: otherwise the other monitors stay covered and the next capture never starts.
+    /// </summary>
+    public void WindowClosing(OverlayWindow window)
+    {
+        if (_finished)
+            return;
+        _windows.Remove(window);
+        Cancel();
+    }
+
     private void UpdateHover()
     {
         if (IsDragging)

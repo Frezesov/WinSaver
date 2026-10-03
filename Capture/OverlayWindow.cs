@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -119,6 +120,13 @@ internal sealed class OverlayWindow : Window
     {
         base.OnContentRendered(e);
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () => SetDwm(DWMWA_CLOAK, 0));
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (!e.Cancel)
+            _session.WindowClosing(this);
     }
 
     // Moving first lets the window take on the target monitor's DPI before it gets its final size in pixels.
